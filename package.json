@@ -1,0 +1,42 @@
+{
+  "name": "cmux-skills",
+  "version": "0.1.0",
+  "description": "Pluggable skills for the cmux terminal that let AI coding agents signal their state on the workspace tab — green while working, yellow when done, red (with a reason, notification, sound and optional voice) when blocked and needing a human.",
+  "keywords": [
+    "cmux",
+    "terminal",
+    "ai-agents",
+    "coding-agents",
+    "notifications",
+    "hermes",
+    "claude-code",
+    "human-in-the-loop"
+  ],
+  "homepage": "https://github.com/kaseonedge/cmux-skills#readme",
+  "bugs": {
+    "url": "https://github.com/kaseonedge/cmux-skills/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaseonedge/cmux-skills.git"
+  },
+  "license": "MIT",
+  "author": "kaseonedge",
+  "type": "commonjs",
+  "bin": {
+    "cmux-skills": "bin/cmux-skills.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "lint": "node -e \"console.log('no linter configured')\""
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

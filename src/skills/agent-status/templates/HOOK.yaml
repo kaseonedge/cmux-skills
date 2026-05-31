@@ -1,0 +1,10 @@
+name: cmux-tab-state
+description: >-
+  cmux-skills agent-status — colors the cmux workspace tab from the Hermes agent
+  lifecycle (green=working, yellow=idle/done). Blocked/red is signalled by the
+  agent itself via `cmux-skills block`. No-ops when not inside a cmux pane.
+events:
+  - agent:start
+  - agent:end
+  - session:end
+  - gateway:startup
