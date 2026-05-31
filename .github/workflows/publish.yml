@@ -1,0 +1,67 @@
+name: Publish to npm
+
+# Publishes cmux-skills to the npm registry when a GitHub Release is published,
+# or via manual dispatch. The release tag drives the version check.
+#
+# Requires repo secret NPM_TOKEN: an npm automation token (npmjs.com ->
+# Access Tokens -> Generate -> "Automation"). Stored via:
+#   gh secret set NPM_TOKEN
+#
+# Publishes with --provenance, so the npm page links back to this workflow run.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Pack and validate but do NOT publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write   # required for npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install (no deps, but validates lockless install)
+        run: npm install --no-audit --no-fund
+
+      - name: Test
+        run: node --test
+
+      - name: Verify tag matches package.json version
+        if: github.event_name == 'release'
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          TAG="${{ github.event.release.tag_name }}"
+          echo "package.json -> $PKG_VERSION ; release tag -> $TAG"
+          if [ "$PKG_VERSION" != "$TAG" ]; then
+            echo "::error::Release tag ($TAG) does not match package.json version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Pack (show tarball contents)
+        run: npm pack --dry-run
+
+      - name: Publish (dry run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: npm publish --dry-run --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
