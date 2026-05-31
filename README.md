@@ -74,7 +74,9 @@ Options for `status`/`block`: `--reason "<text>"`, `--details "<text>"`,
 
 1. Installs a Hermes hook at `~/.hermes/hooks/cmux-tab-state/` that maps the agent
    lifecycle to tab colors automatically (`agent:start`→working,
-   `agent:end`→done, `session:end`→clear, `gateway:startup`→normalize).
+   `agent:end`→done, `session:end`→normalize, `gateway:startup`→normalize).
+   `normalize` drops stale non-blocked state but preserves a genuine `block`
+   across `/new` or `/reset`, so a "needs human" signal is never silently lost.
 2. Appends a short, idempotent guidance block to `~/.hermes/SOUL.md` telling the
    agent to run `cmux-skills block "<reason>"` when it needs a human. Pass
    `--no-soul` to skip this.
