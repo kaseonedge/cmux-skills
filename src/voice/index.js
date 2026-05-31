@@ -30,8 +30,16 @@ function detachedShell(script, text, extraEnv) {
       env: { ...process.env, CMUX_SKILLS_TEXT: text, ...(extraEnv || {}) },
     });
     if (child.stdin) {
-      child.stdin.write(text);
-      child.stdin.end();
+      // The reader may exit before/while we write (e.g. a fast-exiting TTS
+      // command like `:`), which emits an async EPIPE on the stdin stream.
+      // Swallow it: voice is best-effort and must never crash the host.
+      child.stdin.on('error', () => {});
+      try {
+        child.stdin.write(text);
+        child.stdin.end();
+      } catch (_) {
+        /* pipe already torn down — ignore */
+      }
     }
     child.on('error', () => {});
     child.unref();
