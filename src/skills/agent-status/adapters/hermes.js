@@ -5,9 +5,9 @@
  *
  * Installs a Hermes hook (~/.hermes/hooks/cmux-tab-state/) that maps the agent
  * lifecycle to cmux tab colors by shelling out to this package's CLI:
- *   agent:start    -> working (green)
- *   agent:end      -> done    (yellow, unless blocked)
- *   session:end    -> clear
+ *   agent:start    -> working   (green)
+ *   agent:end      -> done      (yellow, unless blocked)
+ *   session:end    -> normalize (drop stale state, but KEEP a real block)
  *   gateway:startup-> normalize (recovery)
  *
  * Blocked/red is NOT automated from a lifecycle event (Hermes agents have no
