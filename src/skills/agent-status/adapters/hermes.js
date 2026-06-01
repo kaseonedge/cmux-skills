@@ -3,27 +3,27 @@
 /**
  * Hermes adapter for the agent-status skill.
  *
- * Installs a Hermes hook (~/.hermes/hooks/cmux-tab-state/) that maps the agent
- * lifecycle to cmux tab colors by shelling out to this package's CLI:
- *   agent:start    -> working   (green)
- *   agent:end      -> done      (yellow, unless blocked)
- *   session:end    -> normalize (drop stale state, but KEEP a real block)
- *   gateway:startup-> normalize (recovery)
+ * SCOPE (v0.2): cmux now ships native agent hooks (`cmux hooks hermes-agent
+ * install`) that own the *lifecycle* — running/idle state, notifications, Feed
+ * approval cards, and session restore. We no longer install a competing Hermes
+ * lifecycle hook; doing so would double-fire against the native config.yaml
+ * hooks.
  *
- * Blocked/red is NOT automated from a lifecycle event (Hermes agents have no
- * goal/blocked signal). Instead we append a short instruction to SOUL.md telling
- * the agent to run `cmux-skills block "<reason>"` when it needs a human.
+ * What this adapter installs now is the one thing cmux's native hooks do NOT do:
+ * the agent-authored "I'm blocked — here's why" escalation. It appends short,
+ * idempotent guidance to SOUL.md telling the agent to run
+ *   cmux-skills block "<reason>"   when it needs a human, and
+ *   cmux-skills clear              once it's unblocked
+ * which drives the red tab + reason + sound + spoken voice readout.
  *
- * After install you must reload Hermes so the hook is picked up:
- *   hermes gateway restart
+ * It also cleans up the legacy lifecycle hook dir from older versions so the two
+ * mechanisms can't fight.
  */
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-
-const TEMPLATE_DIR = path.join(__dirname, '..', 'templates');
 
 const SOUL_BEGIN = '<!-- BEGIN cmux-skills:agent-status -->';
 const SOUL_END = '<!-- END cmux-skills:agent-status -->';
@@ -32,7 +32,8 @@ function hermesHome() {
   return process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
 }
 
-function hookDir() {
+/** Legacy lifecycle-hook dir installed by cmux-skills <= 0.1. */
+function legacyHookDir() {
   return path.join(hermesHome(), 'hooks', 'cmux-tab-state');
 }
 
@@ -41,9 +42,9 @@ function soulPath() {
 }
 
 /**
- * Resolve how to invoke this CLI from a foreign process (the Hermes hook /
- * the agent's shell). Prefer a `cmux-skills` on PATH; otherwise fall back to
- * the absolute node + entrypoint that is running right now.
+ * Resolve how to invoke this CLI from a foreign process (the agent's shell).
+ * Prefer a `cmux-skills` on PATH; otherwise fall back to the absolute node +
+ * entrypoint that is running right now.
  */
 function resolveSelf() {
   const onPath = spawnSync('command -v cmux-skills', {
@@ -58,48 +59,52 @@ function resolveSelf() {
   return { argv: [node, cli], display: `${node} ${cli}` };
 }
 
-function pyList(argv) {
-  return '[' + argv.map((a) => JSON.stringify(a)).join(', ') + ']';
-}
-
 function soulBlock(display) {
   return [
     SOUL_BEGIN,
     '## Workspace status signal (cmux)',
     '',
-    'When you are blocked and need the human to act — waiting on a decision or',
-    'approval, a missing credential/secret, or an error you cannot resolve —',
-    'run this in your terminal so your cmux tab turns red and alerts them:',
+    'cmux already shows when you are running, idle, or awaiting approval. The one',
+    'signal it cannot infer is *why* you are stuck. When you are blocked and need',
+    'the human to act — waiting on a decision or approval, a missing',
+    'credential/secret, or an error you cannot resolve — run this so your cmux tab',
+    'turns red, names the reason, and alerts them (sound + optional voice):',
     '',
     '```',
     `${display} block "<concise reason>"`,
     '```',
     '',
+    'When the human has unblocked you and you resume, clear it:',
+    '',
+    '```',
+    `${display} clear`,
+    '```',
+    '',
     'Keep the reason to a few words; it is shown on the tab. You do NOT need to',
-    'signal working/done — that is automatic. When you resume after the human',
-    'replies, the tab returns to normal on its own.',
+    'signal running/idle — cmux handles that automatically.',
     SOUL_END,
   ].join('\n');
 }
 
+function removeLegacyHook() {
+  const dir = legacyHookDir();
+  try {
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      return `Removed legacy cmux-skills lifecycle hook: ${dir}`;
+    }
+  } catch (e) {
+    return `WARNING: could not remove legacy hook dir (${dir}): ${e.message}`;
+  }
+  return null;
+}
+
 function install({ soul = true } = {}) {
   const lines = [];
-  const dir = hookDir();
-  fs.mkdirSync(dir, { recursive: true });
-
   const self = resolveSelf();
 
-  // HOOK.yaml (verbatim)
-  const yaml = fs.readFileSync(path.join(TEMPLATE_DIR, 'HOOK.yaml'), 'utf8');
-  fs.writeFileSync(path.join(dir, 'HOOK.yaml'), yaml, 'utf8');
-
-  // handler.py with the CLI invocation baked in
-  let handler = fs.readFileSync(path.join(TEMPLATE_DIR, 'handler.py'), 'utf8');
-  handler = handler.replace('__CLI_COMMAND__', pyList(self.argv));
-  fs.writeFileSync(path.join(dir, 'handler.py'), handler, 'utf8');
-
-  lines.push(`Installed Hermes hook: ${dir}`);
-  lines.push(`  CLI invocation: ${self.display}`);
+  const cleaned = removeLegacyHook();
+  if (cleaned) lines.push(cleaned);
 
   if (soul) {
     lines.push(updateSoul(self.display));
@@ -109,12 +114,17 @@ function install({ soul = true } = {}) {
 
   if (self.argv.length > 1) {
     lines.push(
-      '\nNote: `cmux-skills` was not found on PATH, so an absolute path was baked in.\n' +
-        '      For a cleaner setup, install globally: npm i -g cmux-skills',
+      '\nNote: `cmux-skills` was not found on PATH, so an absolute path was baked\n' +
+        '      into SOUL.md. For a cleaner setup: npm i -g cmux-skills',
     );
   }
 
-  lines.push('\nNext: reload Hermes to activate the hook:\n  hermes gateway restart');
+  lines.push(
+    '\nLifecycle (running/idle/approvals/restore) is handled by cmux natively.',
+    'Enable it once for Hermes:',
+    '  cmux hooks hermes-agent install',
+    '  hermes gateway restart        # reload config.yaml so both take effect',
+  );
   return lines.join('\n');
 }
 
@@ -145,13 +155,9 @@ function updateSoul(display) {
 
 function uninstall() {
   const lines = [];
-  const dir = hookDir();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-    lines.push(`Removed Hermes hook: ${dir}`);
-  } catch (e) {
-    lines.push(`Could not remove hook dir: ${e.message}`);
-  }
+
+  const cleaned = removeLegacyHook();
+  if (cleaned) lines.push(cleaned);
 
   // Strip the SOUL.md block.
   const p = soulPath();
@@ -167,8 +173,12 @@ function uninstall() {
     /* no soul file / nothing to do */
   }
 
-  lines.push('\nReload Hermes to deactivate:\n  hermes gateway restart');
+  if (!lines.length) lines.push('Nothing to remove.');
+  lines.push(
+    '\nThis does not touch cmux native hooks. To remove those:',
+    '  cmux hooks hermes-agent uninstall',
+  );
   return lines.join('\n');
 }
 
-module.exports = { install, uninstall, hookDir, soulPath, resolveSelf };
+module.exports = { install, uninstall, legacyHookDir, soulPath, resolveSelf };
