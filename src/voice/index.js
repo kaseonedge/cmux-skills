@@ -1,13 +1,13 @@
 'use strict';
 
 /**
- * Optional voice readout providers.
+ * Voice readout providers. Voice is a core feature, not an optional extra.
  *
  * Providers:
- *   none        - disabled (default)
- *   say         - macOS built-in TTS (`say`)
- *   elevenlabs  - ElevenLabs TTS -> mp3 -> afplay
- *   command     - arbitrary shell command; text on stdin and $CMUX_SKILLS_TEXT
+ *   say         - macOS built-in TTS fallback
+ *   elevenlabs  - ElevenLabs TTS -> mp3 -> afplay; falls back to say if not configured
+ *   command     - arbitrary shell command; text on stdin and $CMUX_HERMES_TEXT/$CMUX_SKILLS_TEXT
+ *   none        - legacy alias treated as say
  *
  * Speaking is always fire-and-forget and detached: we spawn the child,
  * unref it, and return immediately so the host agent's lifecycle is never
@@ -101,13 +101,13 @@ function elevenLabsScript(text, cfg) {
 }
 
 /**
- * Speak the blocked reason if a voice provider is configured.
- * Returns the provider used, or 'none'.
+ * Speak the blocked reason. Returns the provider actually used.
+ * Voice falls back to macOS `say` whenever the selected provider is disabled,
+ * misconfigured, unavailable, or the legacy provider `none`.
  */
 function speak(reason, cfg, workspace, fields = {}) {
   const v = cfg.voice || {};
-  const provider = v.provider || 'none';
-  if (provider === 'none') return 'none';
+  const provider = v.provider || 'say';
 
   const data = {
     action: 'Human action required',
@@ -124,22 +124,24 @@ function speak(reason, cfg, workspace, fields = {}) {
 
   const text = renderTemplate(v.template, data);
 
-  if (provider === 'say') {
+  const speakWithSay = () => {
     detachedShell('exec say', text);
     return 'say';
-  }
+  };
+
   if (provider === 'elevenlabs') {
+    const keyEnv = (cfg.voice.elevenlabs || {}).apiKeyEnv || 'ELEVENLABS_API_KEY';
     const el = elevenLabsScript(text, cfg);
-    if (!el) return 'none';
+    if (!el || !process.env[keyEnv]) return speakWithSay();
     detachedShell(el.script, text, el.env);
     return 'elevenlabs';
   }
   if (provider === 'command') {
-    if (!v.command) return 'none';
+    if (!v.command) return speakWithSay();
     detachedShell(v.command, text);
     return 'command';
   }
-  return 'none';
+  return speakWithSay();
 }
 
 module.exports = { speak, renderTemplate };

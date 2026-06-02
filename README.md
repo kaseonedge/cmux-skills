@@ -1,29 +1,30 @@
 # hermes-cmux
 
-**Hermes Agent blocked-reason alerts for [cmux](https://cmux.com).**
+**Voice-first cmux context and blocked-action alerts for Hermes Agent and OpenClaw.**
 
-cmux already knows when Hermes is running, idle, waiting for approval, and how to restore a session. Two higher-level signals are better owned by Hermes itself:
+cmux already knows when a supported agent is running, idle, waiting for approval, and how to restore a session. Three higher-level signals are better owned by Hermes/OpenClaw itself:
 
-1. **What Hermes is working on right now** — polished dynamic subtext under the tab.
-2. **Why Hermes needs a human and what action the human should take** — red blocked escalation with optional voice.
+1. **Voice** — every human-needed alert is spoken; ElevenLabs is preferred and macOS `say` is the fallback.
+2. **What Hermes/OpenClaw is working on right now** — polished dynamic subtext under the tab.
+3. **Why Hermes/OpenClaw needs a human and what action the human should take** — red blocked escalation with a spoken action.
 
-`hermes-cmux` adds those layers on top of cmux native Hermes hooks:
+`hermes-cmux` adds those layers on top of cmux native hooks:
 
 ```text
-cmux native Hermes hooks        hermes-cmux Hermes context
-running · idle · approval   +   “Reviewing README + testing ElevenLabs voice”
-                            +   🔴 reason + notification + sound + voice
+cmux native hooks             hermes-cmux agent context
+running · idle · approval  +   “Reviewing README + testing ElevenLabs voice”
+                           +   🔊 spoken action + 🔴 reason + notification + sound
 ```
 
-This package is **Hermes-specific**. It is not a general cmux skills library, and it does not try to replace cmux native lifecycle hooks.
+This package is scoped to **Hermes Agent and OpenClaw**. Hermes is verified now; OpenClaw is the next integration target and should be tested before claiming parity. This is not a general cmux skills library, and it does not replace cmux native lifecycle hooks.
 
 > Backward compatibility: the old `cmux-skills` binary name still works as an alias, but new docs and installs should use `hermes-cmux`.
 
 ---
 
-## 1. Install cmux native Hermes hooks
+## 1. Install cmux native hooks
 
-Let cmux own lifecycle state first:
+Let cmux own lifecycle state first. For Hermes:
 
 ```bash
 cmux hooks hermes-agent install
@@ -44,7 +45,7 @@ Native hook session files live under `~/.cmuxterm/<agent>-hook-sessions.json`; `
 
 ---
 
-## 2. Install Hermes blocked-action guidance
+## 2. Install Hermes/OpenClaw voice guidance
 
 ```bash
 npm i -g hermes-cmux
@@ -52,7 +53,7 @@ hermes-cmux init
 hermes-cmux install hermes
 ```
 
-`install hermes` appends idempotent guidance to `~/.hermes/SOUL.md` telling Hermes to keep the tab subtext fresh and to escalate only when it needs a human:
+`install hermes` appends idempotent guidance to `~/.hermes/SOUL.md` telling Hermes to keep the tab subtext fresh and to use voice-first escalation when it needs a human:
 
 ```bash
 hermes-cmux summary "reviewing README and testing ElevenLabs voice"
@@ -66,7 +67,7 @@ Use `--no-soul` if you only want the config/CLI and do not want to edit `SOUL.md
 
 ## 3. Dynamic subtext summaries
 
-Hermes can update the cmux workspace description with a polished one-line summary whenever the active plan changes:
+Hermes/OpenClaw can update the cmux workspace description with a polished one-line summary whenever the active plan changes:
 
 ```bash
 hermes-cmux summary "Reviewing cmux docs, patching Hermes voice tests, then running npm test"
@@ -86,7 +87,7 @@ Recommended summary style:
 
 ## 4. Test voice with an explicit mock action
 
-Use the built-in voice smoke command before relying on live blocked events:
+Voice is a primary feature. Use the built-in smoke command before relying on live blocked events:
 
 ```bash
 hermes-cmux voice-test --dry-run
@@ -96,7 +97,7 @@ hermes-cmux voice-test
 The dry run prints the exact text that would be spoken. The live test speaks a sentence like:
 
 ```text
-Hermes needs you. No real action required: ElevenLabs smoke test. This is a test of the Hermes cmux blocked-alert voice. If you hear this sentence, voice is working and the spoken action is included.
+Hermes needs you. No real action required: ElevenLabs smoke test. This is a test of the Hermes/OpenClaw cmux voice-first blocked alert. If you hear this sentence, voice is working, fallback is available, and the spoken action is included.
 ```
 
 Override fields for a more realistic mock:
@@ -146,7 +147,7 @@ Options for `voice-test`:
 ```text
 --reason "<text>"     Default: ElevenLabs smoke test
 --details "<text>"    Default includes a clear no-op action
---provider <name>     Override configured provider for one test: none | say | elevenlabs | command
+--provider <name>     Override configured provider for one test: say | elevenlabs | command (`none` is legacy and falls back to `say`)
 --dry-run             Print the spoken text without playing audio
 ```
 
@@ -166,7 +167,7 @@ On `init`, an existing legacy config is migrated from:
 ~/.config/cmux-skills/config.json
 ```
 
-Environment overrides prefer the Hermes-specific names, with legacy `CMUX_SKILLS_*` still accepted:
+Environment overrides prefer the Hermes/OpenClaw-specific `CMUX_HERMES_*` names, with legacy `CMUX_SKILLS_*` still accepted:
 
 ```text
 CMUX_HERMES_VOICE_PROVIDER
@@ -190,7 +191,7 @@ Default summary + voice config:
     "prefix": "Hermes: "
   },
   "voice": {
-    "provider": "none",
+    "provider": "say",
     "template": "Hermes needs you. {action}: {reason}. {details}",
     "dedupeSeconds": 30,
     "timeoutSeconds": 30,
@@ -205,12 +206,12 @@ Default summary + voice config:
 
 Voice providers:
 
-- `none` — disabled.
-- `say` — macOS built-in TTS.
-- `elevenlabs` — ElevenLabs TTS. Requires the API key in `ELEVENLABS_API_KEY` by default.
-- `command` — trusted shell command; receives text on stdin and `$CMUX_SKILLS_TEXT`.
+- `elevenlabs` — preferred voice. Requires the API key in `ELEVENLABS_API_KEY` by default; if the key or provider config is missing, it falls back to `say`.
+- `say` — macOS built-in TTS and the default fallback.
+- `command` — trusted shell command; receives text on stdin and `$CMUX_HERMES_TEXT` / `$CMUX_SKILLS_TEXT`.
+- `none` — legacy alias only; treated as `say` so voice remains enabled.
 
-Voice is fire-and-forget, detached, time-bounded, and de-duplicated per workspace/message.
+Voice is fire-and-forget, detached, time-bounded, de-duplicated per workspace/message, and always has a fallback.
 
 ---
 
@@ -220,7 +221,7 @@ Voice is fire-and-forget, detached, time-bounded, and de-duplicated per workspac
 
 | State | Effect |
 | --- | --- |
-| `block` | red tab, reason pill/description, notification, flash, sound, optional voice |
+| `block` | spoken action, red tab, reason pill/description, notification, flash, sound |
 | `clear` | clears blocked marker, status pill, description, and tab color |
 
 A blocked marker is sticky: cmux native idle state will not erase it, and `done` from the legacy alias path will not override red while a real block exists. Only `clear` or a new `working` run clears it.

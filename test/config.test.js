@@ -32,7 +32,7 @@ test('load returns defaults when no user config exists', () => {
   assert.strictEqual(cfg.colors.blocked, 'Red');
   assert.strictEqual(cfg.summary.prefix, 'Hermes: ');
   assert.strictEqual(cfg.summary.statusKey, 'hermes_summary');
-  assert.strictEqual(cfg.voice.provider, 'none');
+  assert.strictEqual(cfg.voice.provider, 'say');
   assert.strictEqual(cfg.voice.template, 'Hermes needs you. {action}: {reason}. {details}');
   assert.strictEqual(cfg.voice.elevenlabs.apiKeyEnv, 'ELEVENLABS_API_KEY');
 });
@@ -70,9 +70,12 @@ test('ensureConfig writes the config file once', () => {
 });
 
 
-test('legacy default voice template is normalized to the Hermes action template', () => {
+test('legacy default voice template and disabled provider are normalized to voice-first defaults', () => {
   const cfg = config.normalizeLegacyConfig(
-    config.deepMerge(config.DEFAULTS, { voice: { template: 'Agent blocked. {reason}' } }),
+    config.deepMerge(config.DEFAULTS, {
+      voice: { template: 'Agent blocked. {reason}', provider: 'none' },
+    }),
   );
   assert.strictEqual(cfg.voice.template, 'Hermes needs you. {action}: {reason}. {details}');
+  assert.strictEqual(cfg.voice.provider, 'say');
 });

@@ -79,7 +79,7 @@ function soulBlock(display) {
     'When you are blocked and need the human to act — waiting on a decision or',
     'approval, a missing credential/secret, or an error you cannot resolve — run',
     'this so your cmux tab turns red, names the reason, and speaks the requested',
-    'action (sound + optional voice):',
+    'action (voice + sound):',
     '',
     '```',
     `${display} block "<concise reason>"`,

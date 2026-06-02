@@ -25,9 +25,25 @@ test('renderTemplate substitutes blocked action fields', () => {
   assert.strictEqual(voice.renderTemplate(undefined, 'x'), 'x');
 });
 
-test('speak is a no-op for provider "none"', () => {
-  const cfg = config.deepMerge(config.DEFAULTS, { voice: { provider: 'none' } });
-  assert.strictEqual(voice.speak('hi', cfg, 'ws-none'), 'none');
+function withFakeSay(fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cmux-hermes-fake-say-'));
+  const sayPath = path.join(dir, 'say');
+  fs.writeFileSync(sayPath, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(sayPath, 0o755);
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${dir}:${oldPath || ''}`;
+  try {
+    return fn();
+  } finally {
+    process.env.PATH = oldPath;
+  }
+}
+
+test('provider none is a legacy alias that falls back to say', () => {
+  withFakeSay(() => {
+    const cfg = config.deepMerge(config.DEFAULTS, { voice: { provider: 'none', dedupeSeconds: 0 } });
+    assert.strictEqual(voice.speak('hi', cfg, 'ws-none'), 'say');
+  });
 });
 
 test('speak dedupes repeats within the window', () => {
@@ -40,13 +56,30 @@ test('speak dedupes repeats within the window', () => {
   assert.strictEqual(voice.speak('same', cfg, 'ws-dedupe'), 'deduped');
 });
 
-test('elevenlabs with unsafe voiceId is rejected (no shell built)', () => {
-  const cfg = config.deepMerge(config.DEFAULTS, {
-    voice: {
-      provider: 'elevenlabs',
-      dedupeSeconds: 0,
-      elevenlabs: { voiceId: 'bad id; rm -rf /', modelId: 'eleven_flash_v2_5' },
-    },
+test('elevenlabs with unsafe voiceId falls back to say (no shell built)', () => {
+  withFakeSay(() => {
+    const cfg = config.deepMerge(config.DEFAULTS, {
+      voice: {
+        provider: 'elevenlabs',
+        dedupeSeconds: 0,
+        elevenlabs: { voiceId: 'bad id; rm -rf /', modelId: 'eleven_flash_v2_5' },
+      },
+    });
+    assert.strictEqual(voice.speak('boom', cfg, 'ws-evil'), 'say');
   });
-  assert.strictEqual(voice.speak('boom', cfg, 'ws-evil'), 'none');
+});
+
+test('elevenlabs without API key falls back to say', () => {
+  withFakeSay(() => {
+    const old = process.env.ELEVENLABS_API_KEY;
+    delete process.env.ELEVENLABS_API_KEY;
+    try {
+      const cfg = config.deepMerge(config.DEFAULTS, {
+        voice: { provider: 'elevenlabs', dedupeSeconds: 0 },
+      });
+      assert.strictEqual(voice.speak('missing key', cfg, 'ws-no-key'), 'say');
+    } finally {
+      if (old !== undefined) process.env.ELEVENLABS_API_KEY = old;
+    }
+  });
 });

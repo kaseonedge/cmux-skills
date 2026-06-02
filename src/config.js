@@ -6,8 +6,9 @@
  * Precedence (low -> high):
  *   built-in DEFAULTS  <  ~/.config/cmux-hermes/config.json  <  env (CMUX_HERMES_*)
  *
- * The config is intentionally small and Hermes-specific: cmux owns lifecycle;
- * this tool only adds Hermes-authored blocked reasons and voice escalation.
+ * The config is intentionally small and scoped to Hermes/OpenClaw: cmux owns
+ * lifecycle; this tool adds agent-authored summaries, blocked reasons, and
+ * voice-first escalation.
  */
 
 const fs = require('fs');
@@ -58,8 +59,9 @@ const DEFAULTS = {
     file: '/System/Library/Sounds/Funk.aiff',
   },
   voice: {
-    // 'none' | 'say' (macOS TTS) | 'elevenlabs' | 'command'
-    provider: 'none',
+    // 'say' (macOS TTS fallback) | 'elevenlabs' | 'command'.
+    // Legacy 'none' is normalized to 'say' because voice is a core feature.
+    provider: 'say',
     // Spoken when blocked. Placeholders: {action}, {reason}, {details}
     template: 'Hermes needs you. {action}: {reason}. {details}',
     // Min seconds between voice readouts for the same workspace+reason.
@@ -127,6 +129,9 @@ function normalizeLegacyConfig(cfg) {
   const out = deepMerge(cfg, {});
   if (out.voice && out.voice.template === 'Agent blocked. {reason}') {
     out.voice.template = DEFAULTS.voice.template;
+  }
+  if (out.voice && (!out.voice.provider || out.voice.provider === 'none')) {
+    out.voice.provider = 'say';
   }
   return out;
 }

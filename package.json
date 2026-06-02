@@ -1,7 +1,7 @@
 {
   "name": "hermes-cmux",
   "version": "0.2.0",
-  "description": "Hermes Agent dynamic cmux subtext and blocked-reason alerts: current-work summaries, red tab with reason, notification, sound, and optional ElevenLabs voice readout layered on top of cmux native Hermes hooks.",
+  "description": "Voice-first cmux context and blocked-action alerts for Hermes Agent and OpenClaw: spoken actions, dynamic subtext, red tab with reason, notification, sound, and ElevenLabs-to-say fallback layered on top of cmux native hooks.",
   "keywords": [
     "cmux",
     "terminal",
@@ -9,8 +9,10 @@
     "coding-agents",
     "notifications",
     "hermes",
+    "openclaw",
     "human-in-the-loop",
-    "elevenlabs"
+    "elevenlabs",
+    "voice"
   ],
   "homepage": "https://github.com/kaseonedge/cmux-skills#readme",
   "bugs": {

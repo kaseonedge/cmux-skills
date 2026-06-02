@@ -57,11 +57,11 @@ function out(obj) {
 
 const USAGE = `hermes-cmux v${pkg.version}
 
-Spoken, reasoned "needs-a-human" alerts for Hermes Agent in cmux.
+Voice-first "needs-a-human" alerts and dynamic subtext for Hermes Agent and OpenClaw in cmux.
 
-cmux's native Hermes hooks (cmux hooks hermes-agent install) already show running/idle/approvals.
-hermes-cmux adds the one thing they don't: a Hermes-authored "I'm blocked —
-here's why and what you need to do" → red tab + reason + sound + voice.
+cmux native hooks show running/idle/approvals. hermes-cmux adds the higher-level
+agent context: polished subtext plus a spoken "I'm blocked — here's what you
+need to do" alert → voice + red tab + reason + notification + sound.
 
 Usage:
   hermes-cmux init                     Create or migrate config and show status
@@ -85,7 +85,7 @@ Options for summary/block:
 Options for voice-test:
   --reason "<text>"    Default: ElevenLabs smoke test
   --details "<text>"   Default includes the action the human should take
-  --provider <name>     Override configured voice provider for one test
+  --provider <name>     Override configured voice provider for one test; none falls back to say
   --dry-run             Print the exact spoken text without playing audio
 
 First, let cmux own the Hermes lifecycle:  cmux hooks hermes-agent install
@@ -175,7 +175,7 @@ function cmdVoiceTest(flags) {
   const reason = typeof flags.reason === 'string' ? flags.reason : 'ElevenLabs smoke test';
   const details = typeof flags.details === 'string'
     ? flags.details
-    : 'This is a test of the Hermes cmux blocked-alert voice. If you hear this sentence, voice is working and the spoken action is included.';
+    : 'This is a test of the Hermes/OpenClaw cmux voice-first blocked alert. If you hear this sentence, voice is working, fallback is available, and the spoken action is included.';
   const action = 'No real action required';
   const text = voice.renderTemplate(cfg.voice.template, { action, reason, details });
   if (flags['dry-run']) {
