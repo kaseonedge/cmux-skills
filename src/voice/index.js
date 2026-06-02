@@ -17,8 +17,14 @@
 const { spawn } = require('child_process');
 const state = require('../state');
 
-function renderTemplate(template, reason) {
-  return String(template || '{reason}').replace(/\{reason\}/g, reason || '');
+function renderTemplate(template, fields) {
+  const data = typeof fields === 'object' && fields !== null
+    ? fields
+    : { reason: fields || '' };
+  return String(template || '{reason}').replace(/\{([A-Za-z0-9_]+)\}/g, (_, key) => {
+    const value = data[key];
+    return value === undefined || value === null ? '' : String(value);
+  });
 }
 
 /** Detached fire-and-forget `sh -c <script>` with text piped on stdin. */
@@ -27,7 +33,7 @@ function detachedShell(script, text, extraEnv) {
     const child = spawn('/bin/sh', ['-c', script], {
       detached: true,
       stdio: ['pipe', 'ignore', 'ignore'],
-      env: { ...process.env, CMUX_SKILLS_TEXT: text, ...(extraEnv || {}) },
+      env: { ...process.env, CMUX_HERMES_TEXT: text, CMUX_SKILLS_TEXT: text, ...(extraEnv || {}) },
     });
     if (child.stdin) {
       // The reader may exit before/while we write (e.g. a fast-exiting TTS
@@ -54,7 +60,7 @@ const SAFE_ENV = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function elevenLabsScript(text, cfg) {
   const el = cfg.voice.elevenlabs || {};
-  const keyEnv = el.apiKeyEnv || 'ELEVEN_API_KEY';
+  const keyEnv = el.apiKeyEnv || 'ELEVENLABS_API_KEY';
   const voiceId = el.voiceId || '';
   const modelId = el.modelId || 'eleven_flash_v2_5';
   const timeout = Math.max(1, cfg.voice.timeoutSeconds || 30);
@@ -98,17 +104,25 @@ function elevenLabsScript(text, cfg) {
  * Speak the blocked reason if a voice provider is configured.
  * Returns the provider used, or 'none'.
  */
-function speak(reason, cfg, workspace) {
+function speak(reason, cfg, workspace, fields = {}) {
   const v = cfg.voice || {};
   const provider = v.provider || 'none';
   if (provider === 'none') return 'none';
 
-  // De-dupe rapid repeats of the same reason on the same workspace.
-  if (state.recentlySpoke(workspace, reason, v.dedupeSeconds || 0)) {
+  const data = {
+    action: 'Human action required',
+    reason: reason || '',
+    details: '',
+    ...fields,
+  };
+  const dedupeKey = [data.action, data.reason, data.details].filter(Boolean).join(' | ');
+
+  // De-dupe rapid repeats of the same message on the same workspace.
+  if (state.recentlySpoke(workspace, dedupeKey, v.dedupeSeconds || 0)) {
     return 'deduped';
   }
 
-  const text = renderTemplate(v.template, reason);
+  const text = renderTemplate(v.template, data);
 
   if (provider === 'say') {
     detachedShell('exec say', text);

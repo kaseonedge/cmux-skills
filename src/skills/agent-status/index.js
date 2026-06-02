@@ -64,6 +64,37 @@ function done(cfg, workspace) {
   return { state: 'done' };
 }
 
+
+function compactText(text, maxLength) {
+  const oneLine = String(text || '').replace(/\s+/g, ' ').trim();
+  const limit = Math.max(20, Number(maxLength) || 140);
+  if (oneLine.length <= limit) return oneLine;
+  return oneLine.slice(0, Math.max(0, limit - 1)).trimEnd() + '…';
+}
+
+function summary(cfg, workspace, text) {
+  const s = cfg.summary || {};
+  const body = compactText(text || 'Working…', s.maxLength);
+  const display = `${s.prefix || ''}${body}`;
+  if (s.setDescription !== false) cmux.setDescription(display, workspace);
+  if (s.statusKey) {
+    cmux.setStatus(
+      s.statusKey,
+      body,
+      { icon: s.icon, color: s.color, priority: s.priority },
+      workspace,
+    );
+  }
+  return { state: 'summary', summary: body };
+}
+
+function clearSummary(cfg, workspace) {
+  const s = cfg.summary || {};
+  if (s.statusKey) cmux.clearStatus(s.statusKey, workspace);
+  cmux.setDescription('', workspace);
+  return { state: 'summary-clear' };
+}
+
 function blocked(cfg, workspace, reason, details) {
   const why = (reason || 'Needs human input').trim();
   state.setBlocked(workspace, why, details || '');
@@ -91,7 +122,8 @@ function blocked(cfg, workspace, reason, details) {
   if (b.flash) cmux.triggerFlash(workspace);
   if (b.sound) playSound(cfg);
 
-  const spoke = voice.speak(why, cfg, workspace);
+  const action = 'Human action required';
+  const spoke = voice.speak(why, cfg, workspace, { action, details: details || '' });
   return { state: 'blocked', reason: why, voice: spoke };
 }
 
@@ -131,6 +163,10 @@ function apply(stateName, cfg, opts = {}) {
       return done(cfg, workspace);
     case 'blocked':
       return blocked(cfg, workspace, opts.reason, opts.details);
+    case 'summary':
+      return summary(cfg, workspace, opts.summary || opts.reason);
+    case 'summary-clear':
+      return clearSummary(cfg, workspace);
     case 'clear':
       return clear(cfg, workspace);
     case 'normalize':
@@ -140,4 +176,4 @@ function apply(stateName, cfg, opts = {}) {
   }
 }
 
-module.exports = { apply, working, done, blocked, clear, normalize };
+module.exports = { apply, working, done, blocked, summary, clearSummary, clear, normalize, compactText };

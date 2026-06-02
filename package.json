@@ -1,7 +1,7 @@
 {
-  "name": "cmux-skills",
+  "name": "hermes-cmux",
   "version": "0.2.0",
-  "description": "Spoken, reasoned \"needs-a-human\" alerts for AI coding agents in the cmux terminal. Layers on top of cmux's native agent hooks: when an agent is blocked it turns its workspace tab red with the reason, plus a notification, sound and optional voice readout. Also covers agents cmux doesn't support natively.",
+  "description": "Hermes Agent dynamic cmux subtext and blocked-reason alerts: current-work summaries, red tab with reason, notification, sound, and optional ElevenLabs voice readout layered on top of cmux native Hermes hooks.",
   "keywords": [
     "cmux",
     "terminal",
@@ -9,8 +9,8 @@
     "coding-agents",
     "notifications",
     "hermes",
-    "claude-code",
-    "human-in-the-loop"
+    "human-in-the-loop",
+    "elevenlabs"
   ],
   "homepage": "https://github.com/kaseonedge/cmux-skills#readme",
   "bugs": {
@@ -24,6 +24,7 @@
   "author": "kaseonedge",
   "type": "commonjs",
   "bin": {
+    "hermes-cmux": "bin/cmux-skills.js",
     "cmux-skills": "bin/cmux-skills.js"
   },
   "files": [

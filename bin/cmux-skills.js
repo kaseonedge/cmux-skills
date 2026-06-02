@@ -2,17 +2,19 @@
 'use strict';
 
 /**
- * cmux-skills — CLI entrypoint.
+ * hermes-cmux — CLI entrypoint.
  *
- *   cmux-skills init                 Create default config + show status
- *   cmux-skills doctor               Diagnose cmux / config / workspace
- *   cmux-skills status <state>       working|done|blocked|clear|normalize
- *   cmux-skills block "<reason>"     Shortcut for: status blocked --reason ...
- *   cmux-skills clear                Shortcut for: status clear
- *   cmux-skills install <adapter>    hermes | generic
- *   cmux-skills uninstall <adapter>  hermes
- *   cmux-skills config <path|show>   Inspect configuration
- *   cmux-skills version
+ *   hermes-cmux init                 Create default config + show status
+ *   hermes-cmux doctor               Diagnose cmux / config / workspace
+ *   hermes-cmux status <state>       working|done|blocked|clear|normalize
+ *   hermes-cmux summary "<text>"   Update cmux subtext with current work
+ *   hermes-cmux block "<reason>"     Shortcut for: status blocked --reason ...
+ *   hermes-cmux clear                Shortcut for: status clear
+ *   hermes-cmux install hermes
+ *   hermes-cmux uninstall hermes
+ *   hermes-cmux voice-test [opts]     Speak a sample blocked-action sentence
+ *   hermes-cmux config <path|show>   Inspect configuration
+ *   hermes-cmux version
  */
 
 const fs = require('fs');
@@ -21,8 +23,8 @@ const path = require('path');
 const config = require('../src/config');
 const cmux = require('../src/cmux');
 const agentStatus = require('../src/skills/agent-status');
+const voice = require('../src/voice');
 const hermesAdapter = require('../src/skills/agent-status/adapters/hermes');
-const genericAdapter = require('../src/skills/agent-status/adapters/generic');
 
 const pkg = require('../package.json');
 
@@ -53,32 +55,40 @@ function out(obj) {
   );
 }
 
-const USAGE = `cmux-skills v${pkg.version}
+const USAGE = `hermes-cmux v${pkg.version}
 
-Spoken, reasoned "needs-a-human" alerts for AI coding agents in cmux.
+Spoken, reasoned "needs-a-human" alerts for Hermes Agent in cmux.
 
-cmux's native hooks (\`cmux hooks setup\`) already show running/idle/approvals.
-cmux-skills adds the one thing they don't: an agent-authored "I'm blocked —
-here's why" → red tab + reason + sound + voice. It also covers agents cmux
-doesn't support natively.
+cmux's native Hermes hooks (cmux hooks hermes-agent install) already show running/idle/approvals.
+hermes-cmux adds the one thing they don't: a Hermes-authored "I'm blocked —
+here's why and what you need to do" → red tab + reason + sound + voice.
 
 Usage:
-  cmux-skills init                     Create default config and show status
-  cmux-skills doctor                   Diagnose cmux install, config, workspace
-  cmux-skills block "<reason>" [opts]  Mark blocked (red + reason + notify + sound + voice)
-  cmux-skills clear                    Clear all signals on the current tab
-  cmux-skills status <state> [opts]    working|done|blocked|clear|normalize (generic wiring)
-  cmux-skills install <adapter>        hermes | generic   (--no-soul to skip SOUL.md)
-  cmux-skills uninstall <adapter>      hermes
-  cmux-skills config <path|show>       Inspect configuration
-  cmux-skills version
+  hermes-cmux init                     Create or migrate config and show status
+  hermes-cmux doctor                   Diagnose cmux install, config, workspace
+  hermes-cmux summary "<text>" [opts]  Update subtext/status with current work
+  hermes-cmux summary clear             Clear dynamic summary subtext
+  hermes-cmux block "<reason>" [opts]  Mark blocked (red + reason + notify + sound + voice)
+  hermes-cmux clear                    Clear all signals on the current tab
+  hermes-cmux voice-test [opts]        Speak a sample blocked-action sentence
+  hermes-cmux install hermes           Add Hermes SOUL.md guidance (--no-soul to skip SOUL.md)
+  hermes-cmux uninstall hermes         Remove Hermes SOUL.md guidance
+  hermes-cmux config <path|show>       Inspect configuration
+  hermes-cmux version
 
-Options for status/block:
+Options for summary/block:
+  --text "<text>"      Summary text for summary
   --reason "<text>"    Why the agent is blocked (shown on the tab)
   --details "<text>"   Longer note (notification body / voice)
   --workspace <id>     Target a specific workspace (default: current pane)
 
-First, let cmux own the lifecycle:  cmux hooks setup
+Options for voice-test:
+  --reason "<text>"    Default: ElevenLabs smoke test
+  --details "<text>"   Default includes the action the human should take
+  --provider <name>     Override configured voice provider for one test
+  --dry-run             Print the exact spoken text without playing audio
+
+First, let cmux own the Hermes lifecycle:  cmux hooks hermes-agent install
 Docs: ${pkg.homepage}
 `;
 
@@ -125,10 +135,19 @@ function cmdDoctor() {
     if (!nativeHooks.length) {
       out(
         '\nℹ  No native cmux agent hooks detected. For running/idle/approvals/restore,\n' +
-          '   run `cmux hooks setup` (cmux-skills adds the block/voice layer on top).',
+          '   run `cmux hooks hermes-agent install` (hermes-cmux adds only the block/voice layer).',
       );
     }
-    out('\n✓ Ready. Try: cmux-skills block "Smoke test" && cmux-skills clear');
+    out('\n✓ Ready. Try: hermes-cmux voice-test --dry-run && hermes-cmux block "Smoke test" && hermes-cmux clear');
+  }
+}
+
+function readStdinIfPiped() {
+  if (process.stdin.isTTY) return '';
+  try {
+    return fs.readFileSync(0, 'utf8').trim();
+  } catch (_) {
+    return '';
   }
 }
 
@@ -144,8 +163,28 @@ function cmdStatus(positional, flags) {
     reason: typeof flags.reason === 'string' ? flags.reason : undefined,
     details: typeof flags.details === 'string' ? flags.details : undefined,
     workspace: typeof flags.workspace === 'string' ? flags.workspace : undefined,
+    summary: typeof flags.text === 'string' ? flags.text : undefined,
   });
   out(result);
+}
+
+
+function cmdVoiceTest(flags) {
+  const cfg = config.load();
+  if (typeof flags.provider === 'string') cfg.voice.provider = flags.provider;
+  const reason = typeof flags.reason === 'string' ? flags.reason : 'ElevenLabs smoke test';
+  const details = typeof flags.details === 'string'
+    ? flags.details
+    : 'This is a test of the Hermes cmux blocked-alert voice. If you hear this sentence, voice is working and the spoken action is included.';
+  const action = 'No real action required';
+  const text = voice.renderTemplate(cfg.voice.template, { action, reason, details });
+  if (flags['dry-run']) {
+    out({ state: 'dry-run', provider: cfg.voice.provider, text });
+    return;
+  }
+  const workspace = typeof flags.workspace === 'string' ? flags.workspace : `voice-test-${Date.now()}`;
+  const spoke = voice.speak(reason, cfg, workspace, { action, details });
+  out({ state: 'voice-test', provider: spoke, text });
 }
 
 function main() {
@@ -168,7 +207,7 @@ function main() {
 
     case 'init': {
       const r = config.ensureConfig();
-      out(r.created ? `Created config: ${r.path}` : `Config exists: ${r.path}`);
+      out(r.migratedFrom ? `Created config: ${r.path} (migrated from ${r.migratedFrom})` : (r.created ? `Created config: ${r.path}` : `Config exists: ${r.path}`));
       cmdDoctor();
       return;
     }
@@ -191,6 +230,17 @@ function main() {
       cmdStatus(positional, flags);
       return;
 
+    case 'summary': {
+      const sub = positional[0];
+      if (sub === 'clear') {
+        cmdStatus(['summary-clear'], flags);
+        return;
+      }
+      const text = positional.join(' ') || (typeof flags.text === 'string' ? flags.text : '') || readStdinIfPiped();
+      cmdStatus(['summary'], { ...flags, text });
+      return;
+    }
+
     case 'block': {
       const reason = positional[0] || (typeof flags.reason === 'string' ? flags.reason : '');
       cmdStatus(['blocked'], { ...flags, reason });
@@ -201,15 +251,18 @@ function main() {
       cmdStatus(['clear'], flags);
       return;
 
+    case 'voice-test':
+    case 'test-voice':
+      cmdVoiceTest(flags);
+      return;
+
     case 'install': {
       const adapter = positional[0];
       const opts = { soul: flags['no-soul'] ? false : true };
       if (adapter === 'hermes') {
         out(hermesAdapter.install(opts));
-      } else if (adapter === 'generic') {
-        out(genericAdapter.install(opts));
       } else {
-        out('error: unknown adapter. Supported: hermes | generic');
+        out('error: unknown adapter. Supported: hermes');
         process.exitCode = 1;
       }
       return;

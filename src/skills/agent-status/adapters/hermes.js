@@ -12,8 +12,8 @@
  * What this adapter installs now is the one thing cmux's native hooks do NOT do:
  * the agent-authored "I'm blocked — here's why" escalation. It appends short,
  * idempotent guidance to SOUL.md telling the agent to run
- *   cmux-skills block "<reason>"   when it needs a human, and
- *   cmux-skills clear              once it's unblocked
+ *   hermes-cmux block "<reason>"   when it needs a human, and
+ *   hermes-cmux clear              once it's unblocked
  * which drives the red tab + reason + sound + spoken voice readout.
  *
  * It also cleans up the legacy lifecycle hook dir from older versions so the two
@@ -43,16 +43,18 @@ function soulPath() {
 
 /**
  * Resolve how to invoke this CLI from a foreign process (the agent's shell).
- * Prefer a `cmux-skills` on PATH; otherwise fall back to the absolute node +
- * entrypoint that is running right now.
+ * Prefer the Hermes-specific `hermes-cmux` on PATH; keep `cmux-skills` as a
+ * backwards-compatible alias; otherwise fall back to node + this entrypoint.
  */
 function resolveSelf() {
-  const onPath = spawnSync('command -v cmux-skills', {
-    shell: true,
-    encoding: 'utf8',
-  });
-  if (onPath.status === 0 && (onPath.stdout || '').trim()) {
-    return { argv: ['cmux-skills'], display: 'cmux-skills' };
+  for (const bin of ['hermes-cmux', 'cmux-skills']) {
+    const onPath = spawnSync(`command -v ${bin}`, {
+      shell: true,
+      encoding: 'utf8',
+    });
+    if (onPath.status === 0 && (onPath.stdout || '').trim()) {
+      return { argv: [bin], display: bin };
+    }
   }
   const node = process.execPath;
   const cli = path.resolve(__dirname, '..', '..', '..', '..', 'bin', 'cmux-skills.js');
@@ -64,11 +66,20 @@ function soulBlock(display) {
     SOUL_BEGIN,
     '## Workspace status signal (cmux)',
     '',
-    'cmux already shows when you are running, idle, or awaiting approval. The one',
-    'signal it cannot infer is *why* you are stuck. When you are blocked and need',
-    'the human to act — waiting on a decision or approval, a missing',
-    'credential/secret, or an error you cannot resolve — run this so your cmux tab',
-    'turns red, names the reason, and alerts them (sound + optional voice):',
+    'cmux already shows when Hermes is running, idle, or awaiting approval. Hermes',
+    'can add the missing human context: what it is working on, and why it is stuck.',
+    '',
+    'When your active workstream meaningfully changes, update the cmux subtext with',
+    'one polished present-tense sentence under ~140 characters:',
+    '',
+    '```',
+    `${display} summary "<what Hermes is working on now>"`,
+    '```',
+    '',
+    'When you are blocked and need the human to act — waiting on a decision or',
+    'approval, a missing credential/secret, or an error you cannot resolve — run',
+    'this so your cmux tab turns red, names the reason, and speaks the requested',
+    'action (sound + optional voice):',
     '',
     '```',
     `${display} block "<concise reason>"`,
@@ -80,8 +91,9 @@ function soulBlock(display) {
     `${display} clear`,
     '```',
     '',
-    'Keep the reason to a few words; it is shown on the tab. You do NOT need to',
-    'signal running/idle — cmux handles that automatically.',
+    'Keep the reason to a few words; it is shown on the tab and read aloud. Put',
+    'extra context in your final message. You do NOT need to signal running/idle —',
+    'cmux handles the Hermes lifecycle automatically.',
     SOUL_END,
   ].join('\n');
 }
@@ -114,8 +126,8 @@ function install({ soul = true } = {}) {
 
   if (self.argv.length > 1) {
     lines.push(
-      '\nNote: `cmux-skills` was not found on PATH, so an absolute path was baked\n' +
-        '      into SOUL.md. For a cleaner setup: npm i -g cmux-skills',
+      '\nNote: `hermes-cmux` was not found on PATH, so an absolute path was baked\n' +
+        '      into SOUL.md. For a cleaner setup: npm i -g hermes-cmux',
     );
   }
 

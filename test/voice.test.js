@@ -13,10 +13,14 @@ const assert = require('node:assert');
 const voice = require('../src/voice');
 const config = require('../src/config');
 
-test('renderTemplate substitutes {reason}', () => {
+test('renderTemplate substitutes blocked action fields', () => {
   assert.strictEqual(
-    voice.renderTemplate('Agent blocked. {reason}', 'no key'),
-    'Agent blocked. no key',
+    voice.renderTemplate('Hermes needs you. {action}: {reason}. {details}', {
+      action: 'No real action required',
+      reason: 'smoke test',
+      details: 'voice includes the action',
+    }),
+    'Hermes needs you. No real action required: smoke test. voice includes the action',
   );
   assert.strictEqual(voice.renderTemplate(undefined, 'x'), 'x');
 });

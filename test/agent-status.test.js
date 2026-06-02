@@ -92,6 +92,26 @@ test('blocked emits the full signal set', () => {
   assert.ok(colorCalls().includes(cfg.colors.blocked));
 });
 
+
+
+test('summary sets polished subtext and status without blocking', () => {
+  stubCmux('ws-summary');
+  const r = agentStatus.apply('summary', cfg, {
+    summary: 'reviewing Hermes cmux dynamic summary implementation and tests',
+  });
+  assert.strictEqual(r.state, 'summary');
+  assert.strictEqual(r.summary, 'reviewing Hermes cmux dynamic summary implementation and tests');
+  const desc = calls.find((c) => c[0] === 'setDescription');
+  assert.ok(desc, 'sets workspace description/subtext');
+  assert.strictEqual(desc[1], 'Hermes: reviewing Hermes cmux dynamic summary implementation and tests');
+  assert.ok(calls.map((c) => c[0]).includes('setStatus'));
+});
+
+test('summary text is compacted for tab subtext', () => {
+  assert.strictEqual(agentStatus.compactText('  a\n\n b   c ', 140), 'a b c');
+  assert.strictEqual(agentStatus.compactText('x'.repeat(30), 20), 'x'.repeat(19) + '…');
+});
+
 test('normalize preserves a genuine blocked marker', () => {
   const ws = 'ws-normalize';
   stubCmux(ws);

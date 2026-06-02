@@ -1,197 +1,229 @@
-# cmux-skills
+# hermes-cmux
 
-**Spoken, reasoned "needs-a-human" alerts for AI coding agents running in
-[cmux](https://cmux.com).**
+**Hermes Agent blocked-reason alerts for [cmux](https://cmux.com).**
 
-cmux already tells you which agent is running, idle, or waiting for approval —
-its native hooks give you the blue ring, sidebar state, Feed approval cards, and
-session restore. The one thing it can't infer is **why** an agent is stuck.
+cmux already knows when Hermes is running, idle, waiting for approval, and how to restore a session. Two higher-level signals are better owned by Hermes itself:
 
-cmux-skills adds exactly that: when an agent decides it needs you — a missing
-credential, a decision, an error it can't resolve — it runs one command and its
-cmux tab turns **red with the reason**, plus a desktop notification, a sound, and
-an optional **spoken voice readout**. When you run many agents at once, an
-audible *"agent 3 is blocked waiting on an API key"* beats a ring you have to be
-looking at.
+1. **What Hermes is working on right now** — polished dynamic subtext under the tab.
+2. **Why Hermes needs a human and what action the human should take** — red blocked escalation with optional voice.
 
-```
-┌─ cmux native ─────────────┐   ┌─ cmux-skills adds ───────────────────────┐
-│ running · idle · approval │ + │ 🔴 "waiting on STRIPE_KEY"  🔔🔊  "…spoken" │
-└───────────────────────────┘   └──────────────────────────────────────────┘
+`hermes-cmux` adds those layers on top of cmux native Hermes hooks:
+
+```text
+cmux native Hermes hooks        hermes-cmux Hermes context
+running · idle · approval   +   “Reviewing README + testing ElevenLabs voice”
+                            +   🔴 reason + notification + sound + voice
 ```
 
-It runs in-process inside the agent's own cmux pane and, when run outside a cmux
-pane, every command safely no-ops — so it's drop-in safe for headless/CI runs.
+This package is **Hermes-specific**. It is not a general cmux skills library, and it does not try to replace cmux native lifecycle hooks.
+
+> Backward compatibility: the old `cmux-skills` binary name still works as an alias, but new docs and installs should use `hermes-cmux`.
 
 ---
 
-## 1. Foundation: let cmux own the lifecycle (native, no skill)
+## 1. Install cmux native Hermes hooks
 
-This step is **cmux's**, not ours — but it's the right base, so it's documented
-here. cmux ships native agent hooks that handle running/idle state,
-notifications, Feed approvals, and session restore for a fixed list of agents:
-
-```bash
-cmux hooks setup                 # install for every supported agent on your PATH
-cmux hooks setup <agent>         # or just one, e.g. cmux hooks setup codex
-cmux hooks <agent> uninstall     # remove one
-```
-
-Native hook targets: `codex`, `grok`, `opencode`, `pi`, `amp`, `cursor`,
-`gemini`, `kiro`, `antigravity`/`agy`, `rovodev`/`rovo`, `copilot`,
-`codebuddy`, `factory`, `qoder`, and `hermes-agent`.
-
-**Claude Code** is special: it does not have a `cmux hooks claude install`
-target. The cmux Claude wrapper injects its hooks automatically when Claude Code
-integration is on in **Settings**.
-
-**Hermes** is one command:
+Let cmux own lifecycle state first:
 
 ```bash
 cmux hooks hermes-agent install
-hermes gateway restart           # reload ~/.hermes/config.yaml so it takes effect
+hermes gateway restart           # reload ~/.hermes/config.yaml so hooks take effect
 ```
 
-Relevant `~/.config/cmux/cmux.json` toggles (set in **Settings** too):
+Claude Code is different: cmux injects Claude hooks through its Claude wrapper when Claude Code integration is enabled in Settings. There is no `cmux hooks claude install` target.
 
-```jsonc
-{
-  // per-agent native integrations
-  "claudeCodeIntegration": true,
-  "cursorIntegration": true,
-  "geminiIntegration": true
-}
-```
-
-Verify it's live — native hooks record sessions under
-`~/.cmuxterm/<agent>-hook-sessions.json`, and `cmux-skills doctor` reports which
-it finds.
-
-> Full native matrix (session-restore commands, Feed bridges, env overrides):
-> `cmux docs agents`, or
-> <https://raw.githubusercontent.com/manaflow-ai/cmux/main/docs/agent-hooks.md>
-
-## 2. Layer cmux-skills on top (the voice/reason escalation)
+Verify native hook sessions with:
 
 ```bash
-# install globally so the `cmux-skills` command is on your PATH (recommended)
-npm i -g cmux-skills
-cmux-skills init                 # create config + show a health check
-
-# Hermes: append block/clear guidance to SOUL.md so the agent knows to escalate
-cmux-skills install hermes
-
-# any other agent: print the exact wiring
-cmux-skills install generic
+cmux hooks --help
+cmux docs agents
+hermes-cmux doctor
 ```
 
-The agent (or your loop) then calls, from inside its cmux pane:
+Native hook session files live under `~/.cmuxterm/<agent>-hook-sessions.json`; `doctor` reports what it detects.
+
+---
+
+## 2. Install Hermes blocked-action guidance
 
 ```bash
-cmux-skills block "<concise reason>"   # red tab + reason + notify + sound + voice
-cmux-skills clear                      # once a human has unblocked you
+npm i -g hermes-cmux
+hermes-cmux init
+hermes-cmux install hermes
 ```
 
-For **Hermes**, `install hermes` adds idempotent guidance to `~/.hermes/SOUL.md`
-telling the agent to do exactly that (and removes any legacy lifecycle hook from
-older cmux-skills versions so it can't fight the native hooks). Pass `--no-soul`
-to skip the SOUL.md edit.
-
-## 3. Agents cmux doesn't support natively
-
-For a custom loop, a shell-script agent, a CI pipeline, or a brand-new CLI cmux
-hasn't added yet, there's no native lifecycle — so cmux-skills can drive the
-whole tab. `cmux-skills install generic` prints the wiring; in short, bracket the
-run and escalate on the blocked path:
+`install hermes` appends idempotent guidance to `~/.hermes/SOUL.md` telling Hermes to keep the tab subtext fresh and to escalate only when it needs a human:
 
 ```bash
-cmux-skills status working      # run/turn starts  -> green
-cmux-skills status done         # run/turn idle    -> yellow
-cmux-skills block "<reason>"    # needs a human    -> red + reason + notify + voice
-cmux-skills clear               # unblocked        -> neutral
-cmux-skills status normalize    # startup recovery -> drop stale, keep a real block
+hermes-cmux summary "reviewing README and testing ElevenLabs voice"
+hermes-cmux block "<concise reason>"
+hermes-cmux clear
 ```
 
-`working`/`done`/`normalize` are only needed here — for natively-supported agents
-cmux already does them.
+Use `--no-soul` if you only want the config/CLI and do not want to edit `SOUL.md`.
 
-## How the escalation works
+---
 
-cmux authenticates its CLI **only from inside a cmux pane** (it injects
-`CMUX_WORKSPACE_ID` + socket auth), so everything runs in-process in the agent's
-own pane and targets the *caller* workspace.
+## 3. Dynamic subtext summaries
 
-| State       | Tab          | Trigger                                              |
-| ----------- | ------------ | --------------------------------------------------- |
-| `blocked`   | red + reason | the agent calls `cmux-skills block "<reason>"`      |
-| `clear`     | neutral      | explicit `cmux-skills clear`                        |
-| `working`   | green        | (generic wiring) a run/turn starts                  |
-| `done`      | yellow       | (generic wiring) the run/turn finishes (idle)       |
-| `normalize` | recovery     | (generic wiring) startup; drops stale, non-blocked state |
+Hermes can update the cmux workspace description with a polished one-line summary whenever the active plan changes:
 
-A blocked marker is **sticky**: cmux's native idle state won't erase it, and
-`done` won't override red while it's set — only `working` or `clear` does. So a
-"needs human" signal is never silently lost. Overlapping/nested runs are
-reference-counted so the tab doesn't flip early.
+```bash
+hermes-cmux summary "Reviewing cmux docs, patching Hermes voice tests, then running npm test"
+hermes-cmux summary clear
+```
+
+This is intentionally lightweight: the main Hermes process can emit summaries at turn boundaries or after major tool phases without starting a daemon. A dedicated summarizer sub-agent is possible later, but it should be event-driven and throttled — not a constantly polling LLM — to avoid token spend and stale racey updates.
+
+Recommended summary style:
+
+- present-tense, human-readable, under ~140 characters;
+- include the concrete workstream, not generic “thinking”;
+- update on meaningful phase changes, not every tool call;
+- never include secrets, raw tokens, private message contents, or stack traces.
+
+---
+
+## 4. Test voice with an explicit mock action
+
+Use the built-in voice smoke command before relying on live blocked events:
+
+```bash
+hermes-cmux voice-test --dry-run
+hermes-cmux voice-test
+```
+
+The dry run prints the exact text that would be spoken. The live test speaks a sentence like:
+
+```text
+Hermes needs you. No real action required: ElevenLabs smoke test. This is a test of the Hermes cmux blocked-alert voice. If you hear this sentence, voice is working and the spoken action is included.
+```
+
+Override fields for a more realistic mock:
+
+```bash
+hermes-cmux voice-test \
+  --reason "missing GitHub token" \
+  --details "Open Bitwarden, sync the Hermes GitHub token, then say continue."
+```
+
+Then test the actual cmux blocked path:
+
+```bash
+hermes-cmux block "missing GitHub token" \
+  --details "Open Bitwarden, sync the Hermes GitHub token, then say continue."
+hermes-cmux clear
+```
+
+---
 
 ## CLI
 
-```
-cmux-skills init                     Create default config and show status
-cmux-skills doctor                   Diagnose cmux install, native hooks, config, workspace
-cmux-skills block "<reason>" [opts]  Mark blocked (red + reason + notify + sound + voice)
-cmux-skills clear                    Clear all signals on the current tab
-cmux-skills status <state> [opts]    working | done | blocked | clear | normalize
-cmux-skills install <adapter>        hermes | generic   (--no-soul to skip SOUL.md)
-cmux-skills uninstall hermes
-cmux-skills config <path|show>
-cmux-skills version
+```text
+hermes-cmux init                     Create or migrate config and show status
+hermes-cmux doctor                   Diagnose cmux install, native hooks, config, workspace
+hermes-cmux summary "<text>" [opts]  Update dynamic cmux subtext/status
+hermes-cmux summary clear            Clear dynamic summary subtext
+hermes-cmux block "<reason>" [opts]  Mark blocked: red tab + reason + notify + sound + voice
+hermes-cmux clear                    Clear blocked signals on the current tab
+hermes-cmux voice-test [opts]        Speak a sample blocked-action sentence
+hermes-cmux install hermes           Add Hermes SOUL.md guidance (--no-soul to skip SOUL.md)
+hermes-cmux uninstall hermes         Remove Hermes SOUL.md guidance
+hermes-cmux config <path|show>       Inspect configuration
+hermes-cmux version
 ```
 
-Options for `status`/`block`: `--reason "<text>"`, `--details "<text>"`,
-`--workspace <id>`.
+Options for `block`:
+
+```text
+--reason "<text>"     Why Hermes is blocked; shown on the tab
+--details "<text>"    Longer action/context; used in notification and voice
+--workspace <id>      Target a workspace; defaults to the caller cmux pane
+```
+
+Options for `voice-test`:
+
+```text
+--reason "<text>"     Default: ElevenLabs smoke test
+--details "<text>"    Default includes a clear no-op action
+--provider <name>     Override configured provider for one test: none | say | elevenlabs | command
+--dry-run             Print the spoken text without playing audio
+```
+
+---
 
 ## Configuration
 
-Config lives at `~/.config/cmux-skills/config.json` (created by
-`cmux-skills init`). Env overrides: `CMUX_SKILLS_VOICE_PROVIDER`,
-`CMUX_SKILLS_SOUND_MODE`, `CMUX_SKILLS_COLOR_{WORKING,DONE,BLOCKED}`.
+New config lives at:
+
+```text
+~/.config/cmux-hermes/config.json
+```
+
+On `init`, an existing legacy config is migrated from:
+
+```text
+~/.config/cmux-skills/config.json
+```
+
+Environment overrides prefer the Hermes-specific names, with legacy `CMUX_SKILLS_*` still accepted:
+
+```text
+CMUX_HERMES_VOICE_PROVIDER
+CMUX_HERMES_SOUND_MODE
+CMUX_HERMES_COLOR_WORKING
+CMUX_HERMES_COLOR_DONE
+CMUX_HERMES_COLOR_BLOCKED
+```
+
+Default summary + voice config:
 
 ```jsonc
 {
-  "colors":  { "working": "Green", "done": "#F1C40F", "blocked": "Red" },
-  "blocked": { "notify": true, "flash": true, "sound": true,
-               "setDescription": true, "renameTitle": false },
-  "sound":   { "mode": "system", "file": "/System/Library/Sounds/Funk.aiff" },
-  "voice":   { "provider": "none" }
+  "summary": {
+    "setDescription": true,
+    "statusKey": "hermes_summary",
+    "icon": "sparkles",
+    "color": "#3498DB",
+    "priority": 50,
+    "maxLength": 140,
+    "prefix": "Hermes: "
+  },
+  "voice": {
+    "provider": "none",
+    "template": "Hermes needs you. {action}: {reason}. {details}",
+    "dedupeSeconds": 30,
+    "timeoutSeconds": 30,
+    "elevenlabs": {
+      "apiKeyEnv": "ELEVENLABS_API_KEY",
+      "voiceId": "iP95p4xoKVk53GoZ742B",
+      "modelId": "eleven_flash_v2_5"
+    }
+  }
 }
 ```
 
-Colors accept cmux named colors (`Red`, `Amber`, `Green`, …) or `#RRGGBB`.
+Voice providers:
 
-### Voice (optional)
-
-Off by default. Set `voice.provider` to:
-
+- `none` — disabled.
 - `say` — macOS built-in TTS.
-- `elevenlabs` — ElevenLabs TTS. Needs an API key in the env var named by
-  `voice.elevenlabs.apiKeyEnv` (default `ELEVENLABS_API_KEY`); tune `voiceId` /
-  `modelId` (these must be plain `[A-Za-z0-9_-]` identifiers).
-- `command` — any shell command, run via `/bin/sh -c`; the text arrives on
-  stdin and as `$CMUX_SKILLS_TEXT`. **This executes arbitrary shell — only use
-  config you trust.**
+- `elevenlabs` — ElevenLabs TTS. Requires the API key in `ELEVENLABS_API_KEY` by default.
+- `command` — trusted shell command; receives text on stdin and `$CMUX_SKILLS_TEXT`.
 
-Voice is always fire-and-forget, detached, time-bounded, and de-duplicated
-(`voice.dedupeSeconds`).
+Voice is fire-and-forget, detached, time-bounded, and de-duplicated per workspace/message.
 
-## How this relates to cmux's native hooks
+---
 
-cmux-skills used to reimplement lifecycle coloring; cmux now does that natively
-(and better — with session restore and Feed approvals). So cmux-skills is
-deliberately scoped to the gap: the **blocked-with-a-reason + voice** escalation
-on top of native hooks, plus full coverage for agents cmux doesn't support yet.
-Use `cmux hooks setup` for lifecycle; use cmux-skills for "I need a human, and
-here's why."
+## Runtime behavior
+
+`hermes-cmux block` only works from inside a cmux pane because cmux authenticates its CLI with pane/workspace environment variables.
+
+| State | Effect |
+| --- | --- |
+| `block` | red tab, reason pill/description, notification, flash, sound, optional voice |
+| `clear` | clears blocked marker, status pill, description, and tab color |
+
+A blocked marker is sticky: cmux native idle state will not erase it, and `done` from the legacy alias path will not override red while a real block exists. Only `clear` or a new `working` run clears it.
 
 ## License
 
