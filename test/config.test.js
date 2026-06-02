@@ -31,6 +31,7 @@ test('load returns defaults when no user config exists', () => {
   assert.strictEqual(cfg.colors.working, 'Green');
   assert.strictEqual(cfg.colors.blocked, 'Red');
   assert.strictEqual(cfg.voice.provider, 'none');
+  assert.strictEqual(cfg.voice.elevenlabs.apiKeyEnv, 'ELEVENLABS_API_KEY');
 });
 
 test('env overrides win over defaults', () => {

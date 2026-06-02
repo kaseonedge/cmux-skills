@@ -37,13 +37,15 @@ cmux hooks setup <agent>         # or just one, e.g. cmux hooks setup codex
 cmux hooks <agent> uninstall     # remove one
 ```
 
-Supported agents: `claude` (auto-injected by the cmux Claude wrapper when Claude
-Code integration is on in **Settings**), `codex`, `grok`, `opencode`, `pi`,
-`amp`, `cursor`, `gemini`, `kiro`, `rovodev`/`rovo`, `copilot`, `codebuddy`,
-`factory`, `qoder`, and `hermes-agent`.
+Native hook targets: `codex`, `grok`, `opencode`, `pi`, `amp`, `cursor`,
+`gemini`, `kiro`, `antigravity`/`agy`, `rovodev`/`rovo`, `copilot`,
+`codebuddy`, `factory`, `qoder`, and `hermes-agent`.
 
-**Claude Code** needs nothing — the cmux Claude wrapper injects its hooks
-automatically. **Hermes** is one command:
+**Claude Code** is special: it does not have a `cmux hooks claude install`
+target. The cmux Claude wrapper injects its hooks automatically when Claude Code
+integration is on in **Settings**.
+
+**Hermes** is one command:
 
 ```bash
 cmux hooks hermes-agent install
@@ -173,7 +175,7 @@ Off by default. Set `voice.provider` to:
 
 - `say` — macOS built-in TTS.
 - `elevenlabs` — ElevenLabs TTS. Needs an API key in the env var named by
-  `voice.elevenlabs.apiKeyEnv` (default `ELEVEN_API_KEY`); tune `voiceId` /
+  `voice.elevenlabs.apiKeyEnv` (default `ELEVENLABS_API_KEY`); tune `voiceId` /
   `modelId` (these must be plain `[A-Za-z0-9_-]` identifiers).
 - `command` — any shell command, run via `/bin/sh -c`; the text arrives on
   stdin and as `$CMUX_SKILLS_TEXT`. **This executes arbitrary shell — only use

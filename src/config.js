@@ -58,7 +58,7 @@ const DEFAULTS = {
     // Hard timeout (seconds) for any voice subprocess.
     timeoutSeconds: 30,
     elevenlabs: {
-      apiKeyEnv: 'ELEVEN_API_KEY',
+      apiKeyEnv: 'ELEVENLABS_API_KEY',
       voiceId: 'iP95p4xoKVk53GoZ742B',
       modelId: 'eleven_flash_v2_5',
     },
