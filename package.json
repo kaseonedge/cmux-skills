@@ -1,5 +1,5 @@
 {
-  "name": "hermes-cmux",
+  "name": "cmux-voice",
   "version": "0.2.0",
   "description": "Voice-first cmux context and blocked-action alerts for Hermes Agent and OpenClaw: spoken actions, dynamic subtext, red tab with reason, notification, sound, and ElevenLabs-to-say fallback layered on top of cmux native hooks.",
   "keywords": [
@@ -26,6 +26,7 @@
   "author": "kaseonedge",
   "type": "commonjs",
   "bin": {
+    "cmux-voice": "bin/cmux-skills.js",
     "hermes-cmux": "bin/cmux-skills.js",
     "cmux-skills": "bin/cmux-skills.js"
   },

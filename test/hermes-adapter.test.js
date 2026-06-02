@@ -20,8 +20,8 @@ test('install writes SOUL.md block/clear guidance and no lifecycle hook', () => 
   const msg = hermes.install();
   const content = fs.readFileSync(soul(), 'utf8');
   assert.ok(content.includes('<!-- BEGIN cmux-skills:agent-status -->'));
-  assert.ok(content.includes('block "<concise reason>"'));
-  assert.ok(content.includes('clear'));
+  assert.ok(content.includes('cmux-voice block "<concise reason>"'));
+  assert.ok(content.includes('cmux-voice clear'));
   // We must NOT install a competing lifecycle hook anymore.
   assert.ok(!fs.existsSync(legacyDir()), 'legacy lifecycle hook must not be created');
   // It should point users at the native lifecycle setup.

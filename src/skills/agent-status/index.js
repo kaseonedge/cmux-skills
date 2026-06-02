@@ -95,9 +95,14 @@ function clearSummary(cfg, workspace) {
   return { state: 'summary-clear' };
 }
 
-function blocked(cfg, workspace, reason, details) {
+function blocked(cfg, workspace, reason, details, action) {
   const why = (reason || 'Needs human input').trim();
-  state.setBlocked(workspace, why, details || '');
+  const requestedAction = (action || 'Human action required').trim();
+  const extra = (details || '').trim();
+  const display = requestedAction === 'Human action required'
+    ? why
+    : `${why} — ${requestedAction}`;
+  state.setBlocked(workspace, why, extra);
 
   cmux.setColor(cfg.colors.blocked, workspace);
 
@@ -111,20 +116,19 @@ function blocked(cfg, workspace, reason, details) {
   }
 
   const b = cfg.blocked || {};
-  if (b.setDescription) cmux.setDescription(why, workspace);
-  if (b.renameTitle) cmux.rename(`🔴 ${why}`, workspace);
+  if (b.setDescription) cmux.setDescription(display, workspace);
+  if (b.renameTitle) cmux.rename(`🔴 ${display}`, workspace);
   if (b.notify) {
     cmux.notify(
-      { title: 'Agent blocked — needs you', subtitle: why, body: details || why },
+      { title: `Agent blocked — ${requestedAction}`, subtitle: why, body: extra || display },
       workspace,
     );
   }
   if (b.flash) cmux.triggerFlash(workspace);
   if (b.sound) playSound(cfg);
 
-  const action = 'Human action required';
-  const spoke = voice.speak(why, cfg, workspace, { action, details: details || '' });
-  return { state: 'blocked', reason: why, voice: spoke };
+  const spoke = voice.speak(why, cfg, workspace, { action: requestedAction, details: extra });
+  return { state: 'blocked', reason: why, action: requestedAction, details: extra, voice: spoke };
 }
 
 function clear(cfg, workspace) {
@@ -162,7 +166,7 @@ function apply(stateName, cfg, opts = {}) {
     case 'done':
       return done(cfg, workspace);
     case 'blocked':
-      return blocked(cfg, workspace, opts.reason, opts.details);
+      return blocked(cfg, workspace, opts.reason, opts.details, opts.action);
     case 'summary':
       return summary(cfg, workspace, opts.summary || opts.reason);
     case 'summary-clear':

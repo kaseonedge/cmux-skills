@@ -2,19 +2,20 @@
 'use strict';
 
 /**
- * hermes-cmux — CLI entrypoint.
+ * cmux-voice — voice-first CLI entrypoint.
  *
- *   hermes-cmux init                 Create default config + show status
- *   hermes-cmux doctor               Diagnose cmux / config / workspace
- *   hermes-cmux status <state>       working|done|blocked|clear|normalize
- *   hermes-cmux summary "<text>"   Update cmux subtext with current work
- *   hermes-cmux block "<reason>"     Shortcut for: status blocked --reason ...
- *   hermes-cmux clear                Shortcut for: status clear
- *   hermes-cmux install hermes
- *   hermes-cmux uninstall hermes
- *   hermes-cmux voice-test [opts]     Speak a sample blocked-action sentence
- *   hermes-cmux config <path|show>   Inspect configuration
- *   hermes-cmux version
+ *   cmux-voice init                 Create default config + show status
+ *   cmux-voice doctor               Diagnose cmux / config / workspace
+ *   cmux-voice status <state>       working|done|blocked|clear|normalize
+ *   cmux-voice summary "<text>"    Update cmux subtext with current work
+ *   cmux-voice block "<reason>"    Shortcut for: status blocked --reason ...
+ *   cmux-voice clear                Shortcut for: status clear
+ *   cmux-voice install hermes
+ *   cmux-voice uninstall hermes
+ *   cmux-voice voice-test [opts]    Speak a sample blocked-action sentence
+ *   cmux-voice broker <status|drain> Inspect or drain the cross-session voice queue
+ *   cmux-voice config <path|show>   Inspect configuration
+ *   cmux-voice version
  */
 
 const fs = require('fs');
@@ -24,6 +25,7 @@ const config = require('../src/config');
 const cmux = require('../src/cmux');
 const agentStatus = require('../src/skills/agent-status');
 const voice = require('../src/voice');
+const broker = require('../src/voice/broker');
 const hermesAdapter = require('../src/skills/agent-status/adapters/hermes');
 
 const pkg = require('../package.json');
@@ -55,30 +57,34 @@ function out(obj) {
   );
 }
 
-const USAGE = `hermes-cmux v${pkg.version}
+const CLI_NAME = path.basename(process.argv[1] || 'cmux-voice') === 'cmux-skills' ? 'cmux-voice' : path.basename(process.argv[1] || 'cmux-voice');
+
+const USAGE = `${CLI_NAME} v${pkg.version}
 
 Voice-first "needs-a-human" alerts and dynamic subtext for Hermes Agent and OpenClaw in cmux.
 
-cmux native hooks show running/idle/approvals. hermes-cmux adds the higher-level
+cmux native hooks show running/idle/approvals. cmux-voice adds the higher-level
 agent context: polished subtext plus a spoken "I'm blocked — here's what you
 need to do" alert → voice + red tab + reason + notification + sound.
 
 Usage:
-  hermes-cmux init                     Create or migrate config and show status
-  hermes-cmux doctor                   Diagnose cmux install, config, workspace
-  hermes-cmux summary "<text>" [opts]  Update subtext/status with current work
-  hermes-cmux summary clear             Clear dynamic summary subtext
-  hermes-cmux block "<reason>" [opts]  Mark blocked (red + reason + notify + sound + voice)
-  hermes-cmux clear                    Clear all signals on the current tab
-  hermes-cmux voice-test [opts]        Speak a sample blocked-action sentence
-  hermes-cmux install hermes           Add Hermes SOUL.md guidance (--no-soul to skip SOUL.md)
-  hermes-cmux uninstall hermes         Remove Hermes SOUL.md guidance
-  hermes-cmux config <path|show>       Inspect configuration
-  hermes-cmux version
+  ${CLI_NAME} init                     Create or migrate config and show status
+  ${CLI_NAME} doctor                   Diagnose cmux install, config, workspace
+  ${CLI_NAME} summary "<text>" [opts]  Update subtext/status with current work
+  ${CLI_NAME} summary clear            Clear dynamic summary subtext
+  ${CLI_NAME} block "<reason>" [opts]  Mark blocked (red + reason + notify + sound + voice)
+  ${CLI_NAME} clear                    Clear all signals on the current tab
+  ${CLI_NAME} voice-test [opts]        Speak a sample blocked-action sentence
+  ${CLI_NAME} broker <status|drain>    Inspect or drain the cross-session voice queue
+  ${CLI_NAME} install hermes           Add Hermes SOUL.md guidance (--no-soul to skip SOUL.md)
+  ${CLI_NAME} uninstall hermes         Remove Hermes SOUL.md guidance
+  ${CLI_NAME} config <path|show>       Inspect configuration
+  ${CLI_NAME} version
 
 Options for summary/block:
   --text "<text>"      Summary text for summary
   --reason "<text>"    Why the agent is blocked (shown on the tab)
+  --action "<text>"    What the human should do next (description / title / voice)
   --details "<text>"   Longer note (notification body / voice)
   --workspace <id>     Target a specific workspace (default: current pane)
 
@@ -111,6 +117,7 @@ function cmdDoctor() {
   const ws = cmux.currentWorkspace();
   const cfg = config.load();
   const nativeHooks = detectNativeHooks();
+  const elevenlabsApiKeyEnv = cfg.voice.elevenlabs?.apiKeyEnv || 'ELEVENLABS_API_KEY';
   const report = {
     cmuxBinary: bin || 'NOT FOUND',
     insideCmuxPane: cmux.insideCmux(),
@@ -120,6 +127,10 @@ function cmdDoctor() {
     configExists: fs.existsSync(config.configPath()),
     stateDir: config.stateDir(),
     voiceProvider: cfg.voice.provider,
+    voiceBroker: cfg.voice.broker?.enabled !== false ? 'enabled' : 'disabled',
+    brokerQueued: broker.status().queued,
+    elevenlabsApiKeyEnv,
+    elevenlabsApiKeyPresent: Boolean(process.env[elevenlabsApiKeyEnv]),
     soundMode: cfg.sound.mode,
     colors: cfg.colors,
   };
@@ -138,7 +149,7 @@ function cmdDoctor() {
           '   run `cmux hooks hermes-agent install` (hermes-cmux adds only the block/voice layer).',
       );
     }
-    out('\n✓ Ready. Try: hermes-cmux voice-test --dry-run && hermes-cmux block "Smoke test" && hermes-cmux clear');
+    out('\n✓ Ready. Try: cmux-voice voice-test --dry-run && cmux-voice block "Smoke test" && cmux-voice clear');
   }
 }
 
@@ -162,6 +173,7 @@ function cmdStatus(positional, flags) {
   const result = agentStatus.apply(stateName, cfg, {
     reason: typeof flags.reason === 'string' ? flags.reason : undefined,
     details: typeof flags.details === 'string' ? flags.details : undefined,
+    action: typeof flags.action === 'string' ? flags.action : undefined,
     workspace: typeof flags.workspace === 'string' ? flags.workspace : undefined,
     summary: typeof flags.text === 'string' ? flags.text : undefined,
   });
@@ -179,12 +191,31 @@ function cmdVoiceTest(flags) {
   const action = 'No real action required';
   const text = voice.renderTemplate(cfg.voice.template, { action, reason, details });
   if (flags['dry-run']) {
-    out({ state: 'dry-run', provider: cfg.voice.provider, text });
+    out({ state: 'dry-run', provider: cfg.voice.provider, broker: cfg.voice.broker?.enabled !== false, text });
     return;
   }
   const workspace = typeof flags.workspace === 'string' ? flags.workspace : `voice-test-${Date.now()}`;
   const spoke = voice.speak(reason, cfg, workspace, { action, details });
   out({ state: 'voice-test', provider: spoke, text });
+}
+
+function cmdBroker(positional, flags) {
+  const sub = positional[0] || 'status';
+  if (sub === 'status') {
+    out({ state: 'broker-status', ...broker.status() });
+    return;
+  }
+  if (sub === 'drain') {
+    const cfg = config.load();
+    const result = broker.drain((event) => voice.speakNowText(event.text, cfg, { detached: false }), {
+      maxEvents: flags.max ? Number(flags.max) : 100,
+      lockStaleSeconds: cfg.voice.broker?.lockStaleSeconds || 300,
+    });
+    out({ state: flags.worker ? 'broker-worker' : 'broker-drain', ...result });
+    return;
+  }
+  out('error: broker requires status or drain');
+  process.exitCode = 1;
 }
 
 function main() {
@@ -254,6 +285,10 @@ function main() {
     case 'voice-test':
     case 'test-voice':
       cmdVoiceTest(flags);
+      return;
+
+    case 'broker':
+      cmdBroker(positional, flags);
       return;
 
     case 'install': {

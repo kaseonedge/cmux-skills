@@ -15,7 +15,7 @@ const config = require('../src/config');
 const agentStatus = require('../src/skills/agent-status');
 
 // Disable real audio during tests; keep every visual signal on.
-const cfg = config.deepMerge(config.DEFAULTS, { sound: { mode: 'none' } });
+const cfg = config.deepMerge(config.DEFAULTS, { sound: { mode: 'none' }, voice: { broker: { enabled: false } } });
 
 // Record cmux calls and stub them so tests never touch the real binary.
 let calls;
@@ -80,9 +80,13 @@ test('overlapping runs stay green until the last done', () => {
   assert.strictEqual(last.state, 'done');
 });
 
-test('blocked emits the full signal set', () => {
+test('blocked emits the full signal set with actionable detail', () => {
   stubCmux('ws-signals');
-  agentStatus.apply('blocked', cfg, { reason: 'disk full', details: 'free space' });
+  agentStatus.apply('blocked', cfg, {
+    reason: 'Claude UltraPlan needs input',
+    action: 'Open the Claude web session and answer the routing question',
+    details: 'Question: what should route through the global broker vs stay direct?',
+  });
   const names = calls.map((c) => c[0]);
   assert.ok(names.includes('setColor'));
   assert.ok(names.includes('setStatus'));
@@ -90,6 +94,18 @@ test('blocked emits the full signal set', () => {
   assert.ok(names.includes('notify'));
   assert.ok(names.includes('triggerFlash'));
   assert.ok(colorCalls().includes(cfg.colors.blocked));
+
+  const description = calls.find((c) => c[0] === 'setDescription');
+  assert.strictEqual(
+    description[1],
+    'Claude UltraPlan needs input — Open the Claude web session and answer the routing question',
+  );
+  const notification = calls.find((c) => c[0] === 'notify');
+  assert.deepStrictEqual(notification[1], {
+    title: 'Agent blocked — Open the Claude web session and answer the routing question',
+    subtitle: 'Claude UltraPlan needs input',
+    body: 'Question: what should route through the global broker vs stay direct?',
+  });
 });
 
 

@@ -12,8 +12,8 @@
  * What this adapter installs now is the one thing cmux's native hooks do NOT do:
  * the agent-authored "I'm blocked — here's why" escalation. It appends short,
  * idempotent guidance to SOUL.md telling the agent to run
- *   hermes-cmux block "<reason>"   when it needs a human, and
- *   hermes-cmux clear              once it's unblocked
+ *   cmux-voice block "<reason>"   when it needs a human, and
+ *   cmux-voice clear              once it's unblocked
  * which drives the red tab + reason + sound + spoken voice readout.
  *
  * It also cleans up the legacy lifecycle hook dir from older versions so the two
@@ -43,11 +43,12 @@ function soulPath() {
 
 /**
  * Resolve how to invoke this CLI from a foreign process (the agent's shell).
- * Prefer the Hermes-specific `hermes-cmux` on PATH; keep `cmux-skills` as a
- * backwards-compatible alias; otherwise fall back to node + this entrypoint.
+ * Prefer the voice-first `cmux-voice` on PATH; keep `hermes-cmux` and
+ * `cmux-skills` as backwards-compatible aliases; otherwise fall back to node +
+ * this entrypoint.
  */
 function resolveSelf() {
-  for (const bin of ['hermes-cmux', 'cmux-skills']) {
+  for (const bin of ['cmux-voice', 'hermes-cmux', 'cmux-skills']) {
     const onPath = spawnSync(`command -v ${bin}`, {
       shell: true,
       encoding: 'utf8',
@@ -82,7 +83,7 @@ function soulBlock(display) {
     'action (voice + sound):',
     '',
     '```',
-    `${display} block "<concise reason>"`,
+    `${display} block "<concise reason>" --action "<what the human should do>" --details "<URL/exact prompt/context>"`,
     '```',
     '',
     'When the human has unblocked you and you resume, clear it:',
@@ -126,8 +127,8 @@ function install({ soul = true } = {}) {
 
   if (self.argv.length > 1) {
     lines.push(
-      '\nNote: `hermes-cmux` was not found on PATH, so an absolute path was baked\n' +
-        '      into SOUL.md. For a cleaner setup: npm i -g hermes-cmux',
+      '\nNote: `cmux-voice` was not found on PATH, so an absolute path was baked\n' +
+        '      into SOUL.md. For a cleaner setup: npm i -g cmux-voice',
     );
   }
 

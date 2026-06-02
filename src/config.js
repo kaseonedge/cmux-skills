@@ -73,6 +73,13 @@ const DEFAULTS = {
       voiceId: 'iP95p4xoKVk53GoZ742B',
       modelId: 'eleven_flash_v2_5',
     },
+    // Cross-session broker serializes voice from all cmux panes.
+    broker: {
+      enabled: true,
+      priority: 100,
+      ttlSeconds: 300,
+      lockStaleSeconds: 300,
+    },
     // For provider 'command': a shell command; the text is passed on stdin
     // and also available as $CMUX_SKILLS_TEXT.
     command: '',
