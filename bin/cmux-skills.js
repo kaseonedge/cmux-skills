@@ -55,15 +55,20 @@ function out(obj) {
 
 const USAGE = `cmux-skills v${pkg.version}
 
-Signal AI coding-agent state on the cmux workspace tab.
+Spoken, reasoned "needs-a-human" alerts for AI coding agents in cmux.
+
+cmux's native hooks (\`cmux hooks setup\`) already show running/idle/approvals.
+cmux-skills adds the one thing they don't: an agent-authored "I'm blocked —
+here's why" → red tab + reason + sound + voice. It also covers agents cmux
+doesn't support natively.
 
 Usage:
   cmux-skills init                     Create default config and show status
   cmux-skills doctor                   Diagnose cmux install, config, workspace
-  cmux-skills status <state> [opts]    state: working|done|blocked|clear|normalize
-  cmux-skills block "<reason>" [opts]  Mark blocked (red + reason + notify + sound)
+  cmux-skills block "<reason>" [opts]  Mark blocked (red + reason + notify + sound + voice)
   cmux-skills clear                    Clear all signals on the current tab
-  cmux-skills install <adapter>        hermes | generic   (--no-soul to skip prompt)
+  cmux-skills status <state> [opts]    working|done|blocked|clear|normalize (generic wiring)
+  cmux-skills install <adapter>        hermes | generic   (--no-soul to skip SOUL.md)
   cmux-skills uninstall <adapter>      hermes
   cmux-skills config <path|show>       Inspect configuration
   cmux-skills version
@@ -73,17 +78,34 @@ Options for status/block:
   --details "<text>"   Longer note (notification body / voice)
   --workspace <id>     Target a specific workspace (default: current pane)
 
+First, let cmux own the lifecycle:  cmux hooks setup
 Docs: ${pkg.homepage}
 `;
+
+function detectNativeHooks() {
+  // cmux native agent hooks record sessions under ~/.cmuxterm/<agent>-hook-sessions.json.
+  const home = process.env.HOME || '';
+  if (!home) return [];
+  try {
+    return fs
+      .readdirSync(path.join(home, '.cmuxterm'))
+      .filter((f) => f.endsWith('-hook-sessions.json'))
+      .map((f) => f.replace('-hook-sessions.json', ''));
+  } catch (_) {
+    return [];
+  }
+}
 
 function cmdDoctor() {
   const bin = cmux.resolveBinary();
   const ws = cmux.currentWorkspace();
   const cfg = config.load();
+  const nativeHooks = detectNativeHooks();
   const report = {
     cmuxBinary: bin || 'NOT FOUND',
     insideCmuxPane: cmux.insideCmux(),
     currentWorkspace: ws || '(none — signals will no-op)',
+    nativeHooksDetected: nativeHooks.length ? nativeHooks : '(none — run `cmux hooks setup`)',
     configPath: config.configPath(),
     configExists: fs.existsSync(config.configPath()),
     stateDir: config.stateDir(),
@@ -100,6 +122,12 @@ function cmdDoctor() {
         'Status calls will safely no-op until run inside a cmux terminal.',
     );
   } else {
+    if (!nativeHooks.length) {
+      out(
+        '\nℹ  No native cmux agent hooks detected. For running/idle/approvals/restore,\n' +
+          '   run `cmux hooks setup` (cmux-skills adds the block/voice layer on top).',
+      );
+    }
     out('\n✓ Ready. Try: cmux-skills block "Smoke test" && cmux-skills clear');
   }
 }

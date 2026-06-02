@@ -1,7 +1,7 @@
 {
   "name": "cmux-skills",
-  "version": "0.1.0",
-  "description": "Pluggable skills for the cmux terminal that let AI coding agents signal their state on the workspace tab — green while working, yellow when done, red (with a reason, notification, sound and optional voice) when blocked and needing a human.",
+  "version": "0.2.0",
+  "description": "Spoken, reasoned \"needs-a-human\" alerts for AI coding agents in the cmux terminal. Layers on top of cmux's native agent hooks: when an agent is blocked it turns its workspace tab red with the reason, plus a notification, sound and optional voice readout. Also covers agents cmux doesn't support natively.",
   "keywords": [
     "cmux",
     "terminal",
